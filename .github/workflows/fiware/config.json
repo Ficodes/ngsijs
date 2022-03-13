@@ -1,0 +1,19 @@
+{
+    "enabler": "NGSI.js",
+    "chapter": "core",
+    "academy": "",
+    "readthedocs": "https://ficodes.github.io/ngsijs/stable/",
+    "helpdesk": "",
+    "coveralls": "https://coveralls.io/github/Ficodes/ngsijs",
+    "github": ["Ficodes/ngsijs"],
+    "dockerregistry": [""],
+    "docker": [""],
+    "email": "h",
+    "status": "incubating",
+    "compose": "",
+    "exclude": [""],
+    "stackexchange": [""],
+    "unit-test": "",
+    "smoke-test": "",
+    "dockerfile": ""
+}
