@@ -1,6 +1,6 @@
 /*
  *     Copyright (c) 2013-2017 CoNWeT Lab., Universidad Politécnica de Madrid
- *     Copyright (c) 2018-2021 Future Internet Consulting and Development Solutions S.L.
+ *     Copyright (c) 2018-2022 Future Internet Consulting and Development Solutions S.L.
  *
  *     This file is part of ngsijs.
  *
@@ -415,28 +415,31 @@
     };
 
     const parse_bad_request = function parse_bad_request(response, correlator) {
+        let error;
         try {
-            var error = parse_error_response(response);
+            error = parse_error_response(response);
         } catch (e) {
-            return Promise.reject(new NGSI.InvalidResponseError(null, correlator));
+            return Promise.reject(new NGSI.InvalidResponseError(null, correlator, response.status, response.responseText));
         }
         return Promise.reject(new NGSI.BadRequestError({message: error.description, correlator: correlator}));
     };
 
     const parse_not_found_response = function parse_not_found_response(response, correlator) {
+        let error;
         try {
-            var error = parse_error_response(response);
+            error = parse_error_response(response);
         } catch (e) {
-            return Promise.reject(new NGSI.InvalidResponseError(null, correlator));
+            return Promise.reject(new NGSI.InvalidResponseError(null, correlator, response.status, response.responseText));
         }
         return Promise.reject(new NGSI.NotFoundError({message: error.description, correlator: correlator}));
     };
 
     const parse_too_many_results = function parse_too_many_results(response, correlator) {
+        let error;
         try {
-            var error = parse_error_response(response);
+            error = parse_error_response(response);
         } catch (e) {
-            return Promise.reject(new NGSI.InvalidResponseError(null, correlator));
+            return Promise.reject(new NGSI.InvalidResponseError(null, correlator, response.status, response.responseText));
         }
         return Promise.reject(new NGSI.TooManyResultsError({message: error.description, correlator: correlator}));
     };
@@ -446,7 +449,7 @@
         try {
             error = parse_error_response(response);
         } catch (e) {
-            return Promise.reject(new NGSI.InvalidResponseError());
+            return Promise.reject(new NGSI.InvalidResponseError(null, null, response.status, response.responseText));
         }
         return Promise.reject(new NGSI.NotFoundError({message: error.title, details: error.detail}));
     };
@@ -456,7 +459,7 @@
         try {
             error = parse_error_response(response);
         } catch (e) {
-            return Promise.reject(new NGSI.InvalidResponseError(e.toString()));
+            return Promise.reject(new NGSI.InvalidResponseError(e.toString(), null, response.status, response.responseText));
         }
         if (error.type === "https://uri.etsi.org/ngsi-ld/errors/InvalidRequest") {
             exc = new NGSI.InvalidRequestError(undefined, error.title, error.detail);
@@ -500,25 +503,25 @@
             supportsAccessControl: true,  // required for using CORS on WireCloud
             method: 'POST'
         }).then(
-            function (response) {
+            (response) => {
                 if ([0, 502, 504].indexOf(response.status) !== -1) {
                     privates.get(this).promise = null;
                     return Promise.reject(new NGSI.ConnectionError());
                 } else if (response.status !== 201) {
                     privates.get(this).promise = null;
-                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
                 }
 
-                var priv = privates.get(this);
+                let priv = privates.get(this);
                 try {
                     priv.source_url = new URL(response.getHeader('Location'));
                 } catch (e) {
                     privates.get(this).promise = null;
-                    return Promise.reject(new NGSI.InvalidResponseError('Invalid/missing Location Header'));
+                    return Promise.reject(new NGSI.InvalidResponseError('Invalid/missing Location Header', null, response.status, response.responseText));
                 }
                 return connect_to_eventsource.call(this);
-            }.bind(this),
-            function (error) {
+            },
+            (error) => {
                 privates.get(this).promise = null;
 
                 // Allow to customize error details by "backends"
@@ -526,7 +529,7 @@
                     error = new NGSI.ConnectionError();
                 }
                 return Promise.reject(error);
-            }.bind(this)
+            }
         );
     };
 
@@ -721,20 +724,20 @@
                 contentType: 'application/json',
                 postBody: JSON.stringify({connection_id: this.connection_id})
             }).then(
-                function (response) {
+                (response) => {
                     if ([200, 201].indexOf(response.status) === -1) {
-                        return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                        return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
                     }
-                    var data = JSON.parse(response.responseText);
-                    var priv = privates.get(this);
+                    let data = JSON.parse(response.responseText);
+                    let priv = privates.get(this);
                     priv.callbacks[data.callback_id] = {
                         callback_id: data.callback_id,
                         method: callback,
                         subscription: null
                     };
                     return Promise.resolve(data);
-                }.bind(this),
-                function (error) {
+                },
+                (error) => {
                     // Allow to customize error details by "backends"
                     if (!(error instanceof NGSI.ConnectionError)) {
                         error = new NGSI.ConnectionError();
@@ -768,17 +771,17 @@
             method: 'DELETE',
             asynchronous: async
         }).then(
-            function (response) {
+            (response) => {
                 if (response.status !== 204) {
-                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
                 }
                 priv.source.close();
                 priv.source = null;
                 priv.connection_id = null;
                 priv.callbacks = {};
                 priv.callbacksBySubscriptionId = {};
-            }.bind(this),
-            function (error) {
+            },
+            (error) => {
                 // Allow to customize error details by "backends"
                 if (!(error instanceof NGSI.ConnectionError)) {
                     error = new NGSI.ConnectionError();
@@ -800,13 +803,13 @@
             supportsAccessControl: true,  // required for using CORS on WireCloud
             method: 'DELETE'
         }).then(
-            function (response) {
+            (response) => {
                 if (response.status !== 204) {
-                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
                 }
                 this.purgeCallback(callback_id);
-            }.bind(this),
-            function (error) {
+            },
+            (error) => {
                 // Allow to customize error details by "backends"
                 if (!(error instanceof NGSI.ConnectionError)) {
                     error = new NGSI.ConnectionError();
@@ -1001,10 +1004,12 @@
      */
     NGSI.InvalidResponseError = class InvalidResponseError extends NGSI.Error {
 
-        constructor(message, correlator) {
+        constructor(message, correlator, code, response) {
             super("InvalidResponse", message);
 
+            this.code = code;
             this.correlator = correlator;
+            this.response = response;
         }
 
     };
@@ -1200,20 +1205,21 @@
             requestHeaders: {
                 "FIWARE-Correlator": options.correlator,
             }
-        }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+        }).then((response) => {
+            const correlator = response.getHeader('Fiware-correlator');
 
             if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
+            let data;
             try {
-                var data = JSON.parse(response.responseText);
+                data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText));
             }
 
-            var result = {
+            const result = {
                 details: data,
                 correlator: correlator
             };
@@ -1375,20 +1381,21 @@
                 "FIWARE-Service": options.service,
                 "FIWARE-ServicePath": options.servicepath
             }
-        }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+        }).then((response) => {
+            const correlator = response.getHeader('Fiware-correlator');
 
             if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
+            let data;
             try {
-                var data = JSON.parse(response.responseText);
+                data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText));
             }
 
-            var result = {
+            const result = {
                 results: data,
                 limit: options.limit,
                 offset: options.offset,
@@ -1524,13 +1531,13 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (options.upsert !== true && response.status === 422) {
                 return Promise.reject(new NGSI.AlreadyExistsError({correlator: correlator}));
             } else if ((options.upsert !== true && response.status !== 201) || (options.upsert === true && [201, 204].indexOf(response.status) === -1)) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -1637,18 +1644,18 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -1754,18 +1761,18 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 attributes: data,
@@ -1890,7 +1897,7 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status === 409) {
@@ -1898,7 +1905,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -2015,7 +2022,7 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status === 409) {
@@ -2023,7 +2030,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -2139,7 +2146,7 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status === 409) {
@@ -2147,7 +2154,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -2244,13 +2251,13 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -2356,18 +2363,18 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status), correlator);
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status), correlator, response.status, response.responseText);
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -2511,7 +2518,7 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status === 409) {
@@ -2519,7 +2526,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -2626,13 +2633,13 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -2740,18 +2747,18 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 409) {
                 return parse_too_many_results(response, correlator);
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -2867,7 +2874,7 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status === 409) {
@@ -2875,7 +2882,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -2970,9 +2977,9 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             var result = {
@@ -3051,16 +3058,16 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -3153,9 +3160,9 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             var result = {
@@ -3352,11 +3359,11 @@
                 }
             });
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status !== 201) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             var location_header = response.getHeader('Location');
@@ -3365,7 +3372,7 @@
                 var subscription_id = subscription_url.pathname.split('/').pop();
                 subscription.id = subscription_id;
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected location header: ' + location_header, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected location header: ' + location_header, correlator, response.status, response.responseText));
             }
 
             if (proxy_callback) {
@@ -3447,16 +3454,16 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -3546,11 +3553,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -3620,11 +3627,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -3716,9 +3723,9 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             var result = {
@@ -3819,11 +3826,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status !== 201) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             var location_header = response.getHeader('Location');
@@ -3832,7 +3839,7 @@
                 var registration_id = registration_url.pathname.split('/').pop();
                 registration.id = registration_id;
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected location header: ' + location_header, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected location header: ' + location_header, correlator, response.status, response.responseText));
             }
 
             return Promise.resolve({
@@ -3905,16 +3912,16 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator);
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText);
             }
             return Promise.resolve({
                 correlator: correlator,
@@ -4008,11 +4015,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -4082,11 +4089,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 404) {
                 return parse_not_found_response(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -4187,11 +4194,11 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
             return Promise.resolve({
                 correlator: correlator
@@ -4327,17 +4334,17 @@
                 "FIWARE-ServicePath": options.servicepath
             }
         }).then(function (response) {
-            var correlator = response.getHeader('Fiware-correlator');
+            const correlator = response.getHeader('Fiware-correlator');
             if (response.status === 400) {
                 return parse_bad_request(response, correlator);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, correlator, response.status, response.responseText));
             }
 
             try {
                 var data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', correlator, response.status, response.responseText));
             }
 
             var result = {
@@ -4499,14 +4506,14 @@
             if (response.status === 400) {
                 return parse_bad_request_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
 
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content'));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText));
             }
 
             const result = {
@@ -4679,7 +4686,7 @@
             } else if (response.status === 409) {
                 return Promise.reject(new NGSI.AlreadyExistsError({}));
             } else if (response.status !== 201) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({
                 entity: entity,
@@ -4787,13 +4794,13 @@
             if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content');
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText);
             }
             return Promise.resolve({
                 format: response.getHeader('Content-Type'),
@@ -4865,7 +4872,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -4952,14 +4959,14 @@
             if (response.status === 400) {
                 return parse_bad_request_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
 
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content'));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText));
             }
 
             const result = {
@@ -5157,7 +5164,7 @@
                 } else if (response.status === 409) {
                     return Promise.reject(new NGSI.AlreadyExistsError({}));
                 } else if (response.status !== 201) {
-                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                    return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
                 }
 
                 const location_header = response.getHeader('Location');
@@ -5167,7 +5174,7 @@
                 } catch (e) {
                     return Promise.reject(new NGSI.InvalidResponseError(
                         'Unexpected location header: ' + location_header
-                    ));
+                    ), null, response.status, response.responseText);
                 }
 
                 if (proxy_callback) {
@@ -5255,7 +5262,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -5341,13 +5348,13 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content');
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText);
             }
             return Promise.resolve({
                 format: response.getHeader('Content-Type'),
@@ -5433,7 +5440,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -5549,12 +5556,12 @@
                 try {
                     data = JSON.parse(response.responseText);
                 } catch (e) {
-                    throw new NGSI.InvalidResponseError('Server returned invalid JSON content');
+                    throw new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText);
                 }
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({
                 updated: data ? data.updated : Object.keys(changes),
@@ -5663,7 +5670,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -5765,12 +5772,12 @@
                 try {
                     data = JSON.parse(response.responseText);
                 } catch (e) {
-                    throw new NGSI.InvalidResponseError('Server returned invalid JSON content');
+                    throw new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText);
                 }
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({
                 updated: data ? data.updated : Object.keys(changes),
@@ -5872,7 +5879,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -5953,14 +5960,14 @@
             if (response.status === 400) {
                 return parse_bad_request_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
 
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content'));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText));
             }
 
             const result = {
@@ -6063,13 +6070,13 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                throw new NGSI.InvalidResponseError('Server returned invalid JSON content');
+                throw new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText);
             }
             return Promise.resolve({
                 format: response.getHeader('Content-Type'),
@@ -6244,14 +6251,14 @@
             if (response.status === 400) {
                 return parse_bad_request_ld(response);
             } else if (response.status !== 200) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
 
             let data;
             try {
                 data = JSON.parse(response.responseText);
             } catch (e) {
-                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content'));
+                return Promise.reject(new NGSI.InvalidResponseError('Server returned invalid JSON content', null, response.status, response.responseText));
             }
 
             const result = {
@@ -6414,7 +6421,7 @@
             } else if (response.status === 409) {
                 return Promise.reject(new NGSI.AlreadyExistsError({}));
             } else if ([201, 204].indexOf(response.status) === -1) {
-                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({
                 entity: entity,
@@ -6487,7 +6494,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -6634,7 +6641,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError("Unexpected error code: " + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -6733,7 +6740,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -6851,7 +6858,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
@@ -6946,7 +6953,7 @@
             } else if (response.status === 404) {
                 return parse_not_found_response_ld(response);
             } else if (response.status !== 204) {
-                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status));
+                return Promise.reject(new NGSI.InvalidResponseError('Unexpected error code: ' + response.status, null, response.status, response.responseText));
             }
             return Promise.resolve({});
         });
