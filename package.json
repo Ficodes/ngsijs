@@ -59,6 +59,6 @@
     "sanitize-html": "^2.4.0"
   },
   "dependencies": {
-    "whatwg-url": "^4.5.0"
+    "whatwg-url": "^11.0.0"
   }
 }
