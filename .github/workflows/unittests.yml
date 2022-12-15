@@ -19,8 +19,8 @@ jobs:
 
     strategy:
       matrix:
-        # Current LTS version: v14
-        node-version: [10.x, 12.x, 14.x, 15.x]
+        # Current LTS version: v18
+        node-version: [12.x, 14.x, 15.x, 18.x]
 
     steps:
       - uses: actions/checkout@v2
